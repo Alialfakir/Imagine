@@ -1,0 +1,196 @@
+import requests
+from datetime import datetime, timezone
+
+# Your Facebook Page API access token
+access_token = "EAAn3kaG9quABOZBEzeFDn8D6tUubodmnkPqZAlEqhUqDyhvIm2PcqZBfxcJkLvBjqd1YFc0FDVmFkn3pkHZAN5lJjhoyhkibKkhSQkMtQCmwk6oVSFYzBGAKBKr665Tauvud9AGL0DMz2CTv45yrW0lZAewIvZC9xcneZBIbQSbPnf107ZCeHCrYZAhE3HZBMd3k9G87VLCilrJjpnyydjf8Oq9hVSphY6GZCrJosuv6bI5"
+
+# Telegram bot token and chat ID
+telegram_bot_token = '7271393196:AAEateWe9vkcKCpp_UywaIaNkJEURHDyuwM'  # Replace with your Telegram Bot Token
+telegram_chat_id = '611359530'  # Replace with your Chat ID
+
+# Account managers and their respective pages
+pages = {
+    "Sama": {
+        "Dr Ahmed": "101171868511821",
+        "Dr Esmat": "2381719672063675",
+        "Sheikh Arab": "500523267087212",
+        "Haty Al Mahi": "311591266316982",
+        "JOKER": "109714472154412"
+    },
+    "Ahmad": {
+        "Abo Halab": "1503006349931940",
+        "Eman Rahma": "2180287595545850",
+        "El Magnoun": "111989463921184",
+        "Al Sawaf": "109937347188431",
+        "Wahat Said": "104119488927936"
+    },
+    "Salma": {
+        "Lamps": "754943811311780",
+        "Samir Aly": "323091204218966",
+        "Zoom": "289462968225104",
+        "Amr Group": "117785938793411",
+        "Tiba": "106046177763711",
+        "MMT": "300091553194622"
+    },
+    "Mai": {
+        "Al Zayan": "270607620007320",
+        "Al Khedawy": "111385218221440",
+        "GM": "102751389336044",
+    },
+    "Gehad": {
+        "Imagine": "102154086060777",
+        "Shamez": "331527240044622",
+    },
+    "Anan": {
+        "Salon Tamam": "163437403528095",
+        "Al Amir": "101085719509890"
+    }
+}
+
+def get_last_story_time(page_id):
+    url = f"https://graph.facebook.com/v14.0/{page_id}/stories?access_token={access_token}"
+    response = requests.get(url)
+
+    if response.status_code == 200:
+        data = response.json()
+        if 'data' in data and len(data['data']) > 0:
+            last_story = data['data'][0]
+
+            # Check if 'created_time' exists in the story data
+            if 'created_time' in last_story:
+                created_time = last_story['created_time']
+
+                if created_time.endswith('Z'):
+                    story_time = datetime.fromisoformat(
+                        created_time[:-1]).replace(tzinfo=timezone.utc)
+                else:
+                    story_time = datetime.fromisoformat(created_time[:-5] +
+                                                        '+00:00')
+
+                time_diff = datetime.now(timezone.utc) - story_time
+                days = time_diff.days
+                hours, remainder = divmod(time_diff.seconds, 3600)
+
+                # Add emoji based on the time difference
+                if days > 3:
+                    return f"Last story {days} days ago 🚨"
+                elif days == 3:
+                    return f"Last story {days} days ago 🟥"
+                elif days == 2:
+                    return f"Last story {days} days ago 🟧"
+                elif days == 1:
+                    return f"Last story {days} day ago 🟨"
+                elif hours < 23:
+                    return f"Last story {hours} hours ago 🟩"
+                else:
+                    return f"Last story {hours} hours ago"
+            else:
+                return "Story 🟩"
+        else:
+            return "No stories found 🟥"
+    else:
+        error_message = response.json().get('error', {}).get('message', 'Unknown error')
+        return f"Error: {response.status_code}, {error_message}"
+
+def get_last_post_time(page_id):
+    url = f"https://graph.facebook.com/v14.0/{page_id}/posts?access_token={access_token}"
+    response = requests.get(url)
+
+    if response.status_code == 200:
+        data = response.json()
+        if 'data' in data and len(data['data']) > 0:
+            last_post = data['data'][0]
+            created_time = last_post['created_time']
+
+            if created_time.endswith('Z'):
+                post_time = datetime.fromisoformat(
+                    created_time[:-1]).replace(tzinfo=timezone.utc)
+            else:
+                post_time = datetime.fromisoformat(created_time[:-5] +
+                                                   '+00:00')
+
+            time_diff = datetime.now(timezone.utc) - post_time
+            days = time_diff.days
+            hours, remainder = divmod(time_diff.seconds, 3600)
+
+            # Add emoji based on the time difference
+            if days > 3:
+                return f"Last post {days} days ago 🚨", 1
+            elif days == 3:
+                return f"Last post {days} days ago 🟥", 2
+            elif days == 2:
+                return f"Last post {days} days ago 🟧", 3
+            elif days == 1:
+                return f"Last post {days} day ago 🟨", 4
+            elif hours < 23:
+                return f"Last post {hours} hours ago 🟩", 5
+            else:
+                return f"Last post {hours} hours ago", 6
+        else:
+            return "No posts found", 7
+    else:
+        error_message = response.json().get('error',
+                                            {}).get('message', 'Unknown error')
+        return f"Error: {response.status_code}, {error_message}", 8
+
+def send_telegram_message(bot_token, chat_id, message):
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    payload = {
+        'chat_id': chat_id,
+        'text': message
+    }
+    response = requests.post(url, data=payload)
+    return response.json()
+
+def check_facebook_pages():
+    report_dict = {}
+
+    # Collect information for each account manager
+    for manager, pages_dict in pages.items():
+        report_list = []
+        green_yellow_count = 0
+        orange_count = 0
+        red_count = 0
+
+        for name, page_id in pages_dict.items():
+            last_post_info, post_priority = get_last_post_time(page_id)
+            last_story_info = get_last_story_time(page_id)
+
+            # Count green, yellow, orange, and red emojis for posts
+            if '🟩' in last_post_info or '🟨' in last_post_info:
+                green_yellow_count += 1
+            if '🟧' in last_post_info:
+                orange_count += 1
+            if '🟥' in last_post_info or '🚨' in last_post_info:
+                red_count += 1
+
+            # Combine post and story information in the report
+            report_list.append((post_priority, f"{name}:\n    {last_post_info}\n    {last_story_info}"))
+
+        # Sort the report by priority (lower number means higher priority)
+        report_list.sort(key=lambda x: x[0])
+
+        # Determine motivation emoji
+        motivation_emoji = ""
+        if green_yellow_count > len(pages_dict) // 2:
+            motivation_emoji = "🌟"  # Motivational emoji for good performance
+        elif orange_count > 0:
+            motivation_emoji = "🤨"  # Neutral emoji for medium performance
+        elif red_count > 0:
+            motivation_emoji = "🥱"  # Demotivational emoji for poor performance
+
+        # Assign the motivational emoji to the manager's name
+        manager_with_emoji = f"{manager} {motivation_emoji}"
+
+        # Ensure all managers are included in the report dictionary
+        report_dict[manager_with_emoji] = "\n\n".join([item[1] for item in report_list])
+
+    # Create the final report for all managers
+    final_report = "\n\n".join([
+        f"{manager}:\n\n{report}" for manager, report in report_dict.items()
+    ])
+
+    # Send the final report via Telegram
+    send_telegram_message(telegram_bot_token, telegram_chat_id, final_report)
+
+check_facebook_pages()
